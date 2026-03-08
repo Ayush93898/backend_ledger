@@ -10,4 +10,8 @@ router.post(
   accountController.createAcconutController,
 );
 
+// get all accounts
+// get --> /api/accounts/ -- all accounts for the logged-in user
+router.get("/",authMiddleware.authMiddleware, accountController.getUserAccountsController)
+
 module.exports = router;

@@ -24,6 +24,12 @@ const userSchema = new mongoose.Schema(
       minlength: [6, "password should contain more than 6 character"],
       select: false, // means the password field won't be returned in query results by default. (explicitly humko password mangwana hoga)
     },
+    systemUser:{ // jiske pass db control hoga wo hi systemUser true kae sakega
+      type:Boolean,
+      default:false, 
+      immutable:true,
+      select:false
+    }
   },
   { timestamps: true },
 );
