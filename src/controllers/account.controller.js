@@ -15,10 +15,38 @@ const createAcconutController = async (req, res) => {
   });
 };
 
-const getUserAccountsController = async(req,res)=>{
-  const accounts = await accountModel.find({user:req.user._id})
+const getUserAccountsController = async (req, res) => {
+  const accounts = await accountModel.find({ user: req.user._id });
   res.status(200).json({
-    accounts
-  })
-}
-module.exports = {createAcconutController,getUserAccountsController}
+    accounts,
+  });
+};
+
+// get-account balance controller
+const getAccountBalanceController = async (req, res) => {
+  const { accountId } = req.params;
+  // also check jo account id aari hai kya wo usi user ka account hai ya nahi
+
+  const account = await accountModel.findOne({
+    _id: accountId,
+    user: req.user._id,
+  });
+
+  if (!account) {
+    return res.status(404).json({
+      message: "Account not found",
+    });
+  }
+
+  const balance = await account.getBalance();
+  res.status(200).json({
+    message: "balance fetched successfully",
+    accountId: accountId,
+    balance: balance,
+  });
+};
+module.exports = {
+  createAcconutController,
+  getUserAccountsController,
+  getAccountBalanceController,
+};

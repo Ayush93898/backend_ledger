@@ -46,7 +46,144 @@ const createTransaction = async (req, res) => {
   const isTransactionAlreadyExists = await transactionModel.findOne({
     idempotencyKey: idempotencyKey,
   });
-  
+
+  if (isTransactionAlreadyExists) {
+    if (isTransactionAlreadyExists.status === "COMPLETED") {
+      return res.status(200).json({
+        message: "Transaction already processed",
+        transaction: isTransactionAlreadyExists,
+      });
+    } else if (isTransactionAlreadyExists.status === "PENDING") {
+      return res.status(200).json({
+        message: "Transaction is still processing",
+      });
+    } else if (isTransactionAlreadyExists.status === "FAILED") {
+      return res.status(500).json({
+        message: "Transaction processing failed, please retry",
+      });
+    } else if (isTransactionAlreadyExists.status === "REVERSED") {
+      return res.status(500).json({
+        message: "Transaction was reversed, please retry",
+      });
+    }
+  }
+
+  // now idempot.. key exist nahi karti (i.e req pehli bar aari hai for transfer amount)
+  //3. check account status
+  // basically ye check karna hai toAcc or fromAcc "CLOSED" or "FROZEN" to nahi hai
+  // amount will be transfers when both acc are "ACTIVE"
+
+  if (
+    fromUserAccount.status !== "ACTIVE" ||
+    toUserAccount.status !== "ACTIVE"
+  ) {
+    return res.status(400).json({
+      message:
+        "Both 'To' and 'From' account must be ACTIVE to process transaction ",
+    });
+  }
+
+  // 4. Derive sender balance from ledger
+  // i.e sender ka balance toh dekhna does it have sufficient balance, then we deduct and transfer to another account
+  // for that we see basic of agg pipeline
+  const balance = await fromUserAccount.getBalance();
+  if (balance < amount) {
+    return res.status(400).json({
+      message: `Insufficient balance. Current balance: ${balance}, Requested: ${amount}`,
+    });
+  }
+
+  // 5. creates transaction (Pending)
+  let transaction;
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+
+    transaction = (
+      await transactionModel.create(
+        [
+          {
+            fromAccount,
+            toAccount,
+            amount,
+            idempotencyKey,
+            status: "PENDING",
+          },
+        ],
+        { session },
+      )
+    )[0]; // i.e Immediate Destructuring by Index as .create me array pass kia hai
+
+    // 6. creates DEBIT ledger entry
+    const debitLedgerEntry = await ledgerModel.create(
+      [
+        {
+          account: fromAccount,
+          amount: amount,
+          transaction: transaction._id,
+          type: "DEBIT",
+        },
+      ],
+      { session },
+    );
+
+    // 7. creates CREDIT ledger entry
+    const creditLedgerEntry = await ledgerModel.create(
+      [
+        {
+          account: toAccount,
+          amount: amount,
+          transaction: transaction._id,
+          type: "CREDIT",
+        },
+      ],
+      { session },
+    );
+
+    // 8. mark transaction completed
+    await transactionModel.findOneAndUpdate(
+      { _id: transaction._id },
+      { status: "COMPLETED" },
+      { session, new: true },
+    );
+
+    // 9. Commit mongoDb session
+    await session.commitTransaction();
+  } catch (error) {
+    await session.abortTransaction();
+    try {
+      await emailService.sendTransactionFailureEmail(
+        req.user.email,
+        req.user.name,
+        amount,
+        toAccount,
+      );
+    } catch (emailError) {
+      console.error("Failure email notification failed:", emailError);
+    }
+    return res.status(500).json({
+      message: "Transaction failed, please retry after sometime",
+    });
+  } finally {
+    session.endSession();
+  }
+
+  // 10. Send email notification
+  try {
+    await emailService.sendTransactionEmail(
+      req.user.email,
+      req.user.name,
+      amount,
+      toAccount,
+    );
+  } catch (emailError) {
+    console.error("Email notification failed:", emailError);
+  }
+
+  return res.status(201).json({
+    message: "Transaction completed successfully",
+    transaction: transaction,
+  });
 };
 
 // basically kiske acc me kitna paisa jana hai or kitna jana with idempotency key
@@ -131,3 +268,19 @@ const createInitialFundsTransaction = async (req, res) => {
 };
 
 module.exports = { createTransaction, createInitialFundsTransaction };
+
+// what 2nd step of creating new transaction done
+/*
+Client sends request with idempotencyKey (e.g. "uuid-abc-123")
+         ↓
+Check DB — does a transaction with this key already exist?
+         ↓
+    YES → What is its status?
+         ↓
+    COMPLETED → "Already done, here's the result"
+    PENDING   → "Still processing, wait"
+    FAILED    → "It failed, you can retry"
+    REVERSED  → "It was reversed, you can retry"
+         ↓
+    NO → (proceed to create new transaction)
+*/
