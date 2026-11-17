@@ -70,7 +70,7 @@ accountSchema.methods.getBalance = async function () {
   return balanceData[0].balance; // eg->[{ balance: 700 }] // extract value inside the object
 };
 
-// another index --  compound index (as ek se zyda feild par index hai na)
+// another index --  compound index (mltb agr dono ke sath search karege toh)
 accountSchema.index({ user: 1, status: 1 }); // to find according to user as well as status also
 
 const accountModel = mongoose.model("account", accountSchema);

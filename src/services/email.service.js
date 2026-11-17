@@ -243,8 +243,8 @@ const sendRegistrationEmail = async (userEmail, name) => {
   await sendEmail(userEmail, subject, text, html);
 };
 
+
 //TRANSACTION
- 
 // if transaction success
 const sendTransactionEmail = async (userEmail, name, amount, toAccount) => {
   const formattedAmount = new Intl.NumberFormat("en-IN", {

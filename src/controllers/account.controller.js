@@ -45,6 +45,7 @@ const getAccountBalanceController = async (req, res) => {
     balance: balance,
   });
 };
+
 module.exports = {
   createAcconutController,
   getUserAccountsController,
