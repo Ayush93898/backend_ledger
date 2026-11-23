@@ -1,0 +1,505 @@
+{
+  "info": {
+    "_postman_id": "5e8480c4-bfb0-41f0-9da2-52772f726f57",
+    "name": "Ledger Backend",
+    "description": "Requests for the implemented Ledger Backend routes. Use a disposable test database. Registration, account creation, logout, and transfers write data. Initial funding requires a pre-provisioned system user and account.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "description": "Creates a user and attempts a registration email. Use a disposable test address and database.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('response contains user and token', function () { pm.expect(body.user).to.be.an('object'); pm.expect(body.token).to.be.a('string'); });",
+                  "  pm.environment.set('token', body.token);",
+                  "  pm.environment.set('userId', body.user._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"{{name}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "description": "Logs in and sets the token cookie. The response JSON does not contain a token; the test script reads the Set-Cookie response header when present.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('response contains message and user', function () { pm.expect(body.message).to.be.a('string'); pm.expect(body.user).to.be.an('object'); });",
+                  "  const setCookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "  const match = setCookie.match(/(?:^|,\\s*)token=([^;]+)/);",
+                  "  if (match) pm.environment.set('token', decodeURIComponent(match[1]));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Login - invalid password",
+          "description": "Checks the controller's invalid-credentials response. Uses an existing test email and a deliberately incorrect password.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('response contains the current error key', function () { pm.expect(pm.response.json()).to.have.property('mesage'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"deliberately-wrong-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "description": "Clears the token cookie and blacklists the supplied token. Requires a valid token in the environment or cookie jar.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('response confirms logout', function () { pm.expect(pm.response.json().message).to.eql('User logged out successfully'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/auth/logout"
+          },
+          "response": []
+        },
+        {
+          "name": "Protected account list - missing token",
+          "description": "Clear the Postman cookie jar for this host before sending, otherwise a retained token cookie can authenticate the request.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('response reports missing token', function () { pm.expect(pm.response.json().message).to.eql('Unauthorized access, token is missing'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{baseUrl}}/api/accounts/"
+          },
+          "response": []
+        },
+        {
+          "name": "Protected account list - invalid token",
+          "description": "Clear the cookie jar for this host before sending so the deliberately invalid bearer token is used.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('response reports invalid token', function () { pm.expect(pm.response.json().message).to.eql('Unauthorized access, token is invalid'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not.a.valid.jwt",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/accounts/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Create account",
+          "description": "Creates an account for the authenticated user. Saves accountId; the first created ID is also saved as senderAccountId and the next distinct ID as recipientAccountId.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) {",
+                  "  const account = pm.response.json().account;",
+                  "  pm.test('response contains an account', function () { pm.expect(account).to.be.an('object'); pm.expect(account._id).to.be.a('string'); });",
+                  "  pm.environment.set('accountId', account._id);",
+                  "  if (!pm.environment.get('senderAccountId')) pm.environment.set('senderAccountId', account._id);",
+                  "  else if (!pm.environment.get('recipientAccountId') && account._id !== pm.environment.get('senderAccountId')) pm.environment.set('recipientAccountId', account._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/accounts/"
+          },
+          "response": []
+        },
+        {
+          "name": "List accounts",
+          "description": "Lists accounts belonging to the authenticated user.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('accounts is an array', function () { pm.expect(pm.response.json().accounts).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/accounts/"
+          },
+          "response": []
+        },
+        {
+          "name": "Get account balance",
+          "description": "Calculates balance from the selected account's ledger entries. Set accountId from Create account or the environment.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('response contains accountId and numeric balance', function () { const body = pm.response.json(); pm.expect(body.accountId).to.be.a('string'); pm.expect(body.balance).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/accounts/balance/{{accountId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Get nonexistent account balance",
+          "description": "Uses a valid-looking ObjectId placeholder that should not exist in the test database. Expects the controller's account-not-found response.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('response reports account not found', function () { pm.expect(pm.response.json().message).to.eql('Account not found'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/accounts/balance/{{missingAccountId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "Create initial funds",
+          "description": "System-user-only. Requires a pre-provisioned system user/account and a recipient account. Set systemToken and use a fresh idempotencyKey. This route writes a transaction and ledger entries.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) pm.test('transaction is completed', function () { pm.expect(pm.response.json().transaction.status).to.eql('COMPLETED'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toAccount\": \"{{senderAccountId}}\",\n  \"amount\": 100,\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/transactions/system/initial-fund"
+          },
+          "response": []
+        },
+        {
+          "name": "Create transfer",
+          "description": "Transfers from senderAccountId to recipientAccountId. Requires active accounts and sufficient sender balance. Set a fresh idempotencyKey. The returned transaction object may retain PENDING status although the database record is updated.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) pm.test('response contains a transaction', function () { pm.expect(pm.response.json().transaction).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccount\": \"{{senderAccountId}}\",\n  \"toAccount\": \"{{recipientAccountId}}\",\n  \"amount\": 10,\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/transactions/"
+          },
+          "response": []
+        },
+        {
+          "name": "Retry transfer with same idempotency key",
+          "description": "Send only after Create transfer completed. Reuses the same body and idempotency key; the completed request is expected to return the existing transaction.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('response reports prior processing', function () { pm.expect(pm.response.json().message).to.eql('Transaction already processed'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccount\": \"{{senderAccountId}}\",\n  \"toAccount\": \"{{recipientAccountId}}\",\n  \"amount\": 10,\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/transactions/"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
