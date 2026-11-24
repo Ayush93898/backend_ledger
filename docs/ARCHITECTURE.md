@@ -48,11 +48,13 @@ Mongoose models map to MongoDB collections. ObjectId references connect users to
 The regular transfer controller:
 
 1. Reads source and destination accounts and checks the idempotency key.
-2. Checks account status and derives sender balance from ledger entries.
-3. Starts a Mongoose session/transaction.
+2. Checks account status and starts a Mongoose session/transaction.
+3. In the session, increments the sender account's version key and calculates the sender balance from ledger entries.
 4. Creates a pending transaction and debit/credit ledger documents in the session.
 5. Updates the transaction status to completed and commits.
 6. Attempts a success email after commit.
+
+The sender-account write inside each transfer transaction provides a shared write-conflict point. Concurrent transfers from the same account cannot both commit based on the same ledger snapshot: a conflicting transaction aborts rather than committing a second spend. The current controller does not retry such a conflict automatically.
 
 The initial-funding controller uses a session to create a debit and credit ledger entry, save a completed transaction, and commit. It does not use the same idempotency lookup/check sequence as the regular transfer handler.
 

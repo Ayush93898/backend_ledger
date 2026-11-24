@@ -2,15 +2,15 @@
 
 ## Current automated-test setup
 
-No test files or testing framework are present in the project. `package.json` defines:
+There is no external test framework dependency. A focused controller test file uses Node.js's built-in `node:test` runner and mocks the Mongoose model operations and email service; it does not connect to MongoDB. Run it with:
 
 ```sh
-npm test
+node --test
 ```
 
-as a placeholder that prints an error and exits with status 1. This is not a test suite and must not be reported as a test result.
+The existing `npm test` script remains a placeholder that prints an error and exits with status 1; it is not the test command.
 
-Jest with Supertest is a suitable future choice: Jest provides test discovery/assertions/mocking, and Supertest can exercise Express routes without requiring a separately launched HTTP client. Neither is installed or configured. Obtain approval before adding dependencies or test files. Run any future tests only with an isolated test database or mocked models.
+Jest with Supertest could be considered later for broader route-level coverage, but neither is installed. No dependency was added for the focused tests.
 
 ## Prerequisites for manual Postman tests
 
@@ -39,9 +39,12 @@ Do not run write requests against a shared or valuable database. Registration, a
 
 The collection includes all eight implemented API routes plus representative invalid-login, missing-token, invalid-token, balance-not-found, and idempotency-retry requests. Response scripts check status and basic response shape. Environment variables contain placeholders only.
 
-## Known testing limitations
+## Current coverage and limitations
 
-- No automated suite has been run or configured.
+The focused tests cover source-account ownership rejection, verify that a simulated concurrent sender-account write conflict does not commit a second transfer, and confirm the ledger balance aggregation uses the supplied session. The concurrency test mocks the write conflict; it does not prove behavior against a live MongoDB deployment.
+
+- The test suite does not cover every API, validation branch, or email behavior.
+- No live database integration test has been configured or run.
 - The repository does not include an isolated database setup or fixture/seeding process.
 - The public API cannot create a system user or provision its account.
 - MongoDB transactions require a transaction-capable deployment.

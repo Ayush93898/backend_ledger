@@ -30,6 +30,7 @@ Defined in `src/models/account.model.js`.
 | `createdAt`, `updatedAt` | Dates | Added by timestamps option. |
 
 No balance field exists. `getBalance()` aggregates associated ledger entries: total credits minus total debits; no entries yields zero.
+The schema retains Mongoose's default `__v` version key. The regular transfer flow increments it in the transaction before reading the ledger balance, providing a shared write-conflict point for concurrent transfers from the same account.
 
 ### Transaction (`transaction`)
 

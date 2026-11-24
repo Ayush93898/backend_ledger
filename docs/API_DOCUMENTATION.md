@@ -92,8 +92,8 @@ All account routes require `authMiddleware`.
   ```
 
 - **Success:** `201`, with `message` and `transaction`. The controller returns the in-memory transaction created as `PENDING`; it updates the database record to `COMPLETED` but does not replace that in-memory object before responding.
-- **Errors:** `400` for missing fields, missing accounts, non-active accounts, or insufficient balance; `401` from authentication. A previously seen key returns `200` for `COMPLETED` (`Transaction already processed`) or `PENDING` (`Transaction is still processing`), and `500` for `FAILED` or `REVERSED`. Failures in the write block return a generic `500` response.
-- **Database operations:** Looks up accounts and idempotency key, aggregates sender ledger balance, then in a session creates a transaction, debit ledger entry, credit ledger entry, updates status, and commits.
+- **Errors:** `400` for missing fields, missing accounts, a source account not owned by the caller, non-active accounts, or insufficient balance; `401` from authentication. A previously seen key returns `200` for `COMPLETED` (`Transaction already processed`) or `PENDING` (`Transaction is still processing`), and `500` for `FAILED` or `REVERSED`. Database write conflicts/errors in the session return the generic `500` response; the controller does not retry them.
+- **Database operations:** Looks up the caller-owned source account, destination account, and idempotency key. In a session it increments the source account's version key, aggregates the ledger balance using the same session, creates a transaction and debit/credit ledger entries, updates status, and commits. The source write prevents concurrent transfers from committing against the same source-account state.
 - **Controller/models:** `createTransaction`; `accountModel`, `transactionModel`, `ledgerModel`.
 - **Other operation:** Attempts success/failure email notifications.
 

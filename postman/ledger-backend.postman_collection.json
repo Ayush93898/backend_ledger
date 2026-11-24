@@ -117,7 +117,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"deliberately-wrong-password\"\n}",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{invalidPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -361,6 +361,52 @@
     {
       "name": "Transactions",
       "item": [
+        {
+          "name": "Create transfer - missing required fields",
+          "description": "Sends an empty JSON object to the authenticated transfer route. The controller explicitly returns 400 when fromAccount, toAccount, amount, or idempotencyKey is missing.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('response lists required fields', function () { pm.expect(pm.response.json().message).to.eql('fromAccount, toAccount, amount and idempotencyKey are required'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/transactions/"
+          },
+          "response": []
+        },
         {
           "name": "Create initial funds",
           "description": "System-user-only. Requires a pre-provisioned system user/account and a recipient account. Set systemToken and use a fresh idempotencyKey. This route writes a transaction and ledger entries.",

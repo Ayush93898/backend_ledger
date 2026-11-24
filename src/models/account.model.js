@@ -32,8 +32,8 @@ const accountSchema = new mongoose.Schema(
 
 // Final Balance = Total CREDIT - Total DEBIT
 // goal : -> "Find the balance of THIS account by looking at its ledger entries"
-accountSchema.methods.getBalance = async function () {
-  const balanceData = await ledgerModel.aggregate([
+accountSchema.methods.getBalance = async function (session) {
+  const balanceQuery = ledgerModel.aggregate([
     { $match: { account: this._id } }, // stage 1 -> From ALL ledger entries, only give me entries that belong to **this account
 
     { // Stage 2 — $group (Calculate)
@@ -61,6 +61,12 @@ accountSchema.methods.getBalance = async function () {
       },
     },
   ]); // agg pipeline -> custom query run kar sakte hai
+
+  if (session) {
+    balanceQuery.session(session);
+  }
+
+  const balanceData = await balanceQuery;
 
   // but if user ka acc naya hia toh ledger me entry nhi hoti , then balanceData returns a empty array
   if (balanceData.length === 0) {

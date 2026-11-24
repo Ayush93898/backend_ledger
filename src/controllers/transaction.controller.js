@@ -33,7 +33,10 @@ const createTransaction = async (req, res) => {
   }
 
   // now check fromAcc or toAcc exist karte bhi hai ya nahi
-  const fromUserAccount = await accountModel.findOne({ _id: fromAccount });
+  const fromUserAccount = await accountModel.findOne({
+    _id: fromAccount,
+    user: req.user._id,
+  });
   const toUserAccount = await accountModel.findOne({ _id: toAccount });
 
   if (!fromUserAccount || !toUserAccount) {
@@ -83,22 +86,38 @@ const createTransaction = async (req, res) => {
     });
   }
 
-  // 4. Derive sender balance from ledger
-  // i.e sender ka balance toh dekhna does it have sufficient balance, then we deduct and transfer to another account
-  // for that we see basic of agg pipeline
-  const balance = await fromUserAccount.getBalance();
-  if (balance < amount) {
-    return res.status(400).json({
-      message: `Insufficient balance. Current balance: ${balance}, Requested: ${amount}`,
-    });
-  }
-
-  // 5. creates transaction (Pending)
+  // 4. Serialize balance checks for this sender inside the transaction.
   let transaction;
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
 
+    const lockedFromAccount = await accountModel.findOneAndUpdate(
+      {
+        _id: fromAccount,
+        user: req.user._id,
+        status: "ACTIVE",
+      },
+      { $inc: { __v: 1 } },
+      { session, new: true },
+    );
+
+    if (!lockedFromAccount) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        message: "Invalid fromAccount or from account must be ACTIVE",
+      });
+    }
+
+    const balance = await lockedFromAccount.getBalance(session);
+    if (balance < amount) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        message: `Insufficient balance. Current balance: ${balance}, Requested: ${amount}`,
+      });
+    }
+
+    // 5. creates transaction (Pending)
     transaction = (
       await transactionModel.create(
         [

@@ -43,7 +43,7 @@ flowchart TD
 
 The server loads environment variables, starts the MongoDB connection, and listens on `PORT`. Express parses JSON and cookies, dispatches requests to routers, and protected routes authenticate before controller logic. Controllers call Mongoose models and return JSON responses.
 
-For regular transfers, the controller uses a MongoDB session to write a transaction and its debit and credit ledger entries. The account model calculates a balance as total credits minus total debits.
+For regular transfers, the controller updates the sender's Mongoose version key within the MongoDB session before checking the ledger-derived balance. This creates a shared write-conflict point for concurrent transfers from the same account; the transaction and its debit/credit ledger entries are then written in that session.
 
 ## Project structure
 
@@ -59,8 +59,9 @@ For regular transfers, the controller uses a MongoDB session to write a transact
 │   ├── models/
 │   ├── routes/
 │   └── services/email.service.js
+├── docs/
 ├── postman/
-└── docs/
+└── test/
 ```
 
 ## Data model overview
@@ -71,7 +72,7 @@ For regular transfers, the controller uses a MongoDB session to write a transact
 - **Ledger:** account, amount, transaction reference, and `CREDIT`/`DEBIT` type.
 - **Token blacklist:** revoked token and creation time, with a three-day TTL index.
 
-See [docs/DATABASE.md](docs/DATABASE.md) for fields, validation, references, and indexes.
+See [docs/DATABASE.md](docs/DATABASE.md) for fields, validation, references, and indexes. [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md) explains the backend concepts used in the implementation.
 
 ## API summary
 
@@ -123,7 +124,7 @@ The email service reads `EMAIL_USER`; it was not among the variable names presen
 
 ## Tests and Postman
 
-There is currently no automated test framework or test suite. `npm test` is a placeholder that exits with an error. Do not treat it as a passing test command. See [docs/TESTING.md](docs/TESTING.md) for safe manual testing, limitations, and a proposed framework (not installed).
+There is no external automated-test framework installed. Focused tests use Node.js's built-in `node:test` runner and mocked database operations; run them with `node --test`. The existing `npm test` script remains a placeholder that exits with an error. See [docs/TESTING.md](docs/TESTING.md) for test scope and limitations.
 
 Import [postman/ledger-backend.postman_collection.json](postman/ledger-backend.postman_collection.json) and the environment template [postman/ledger-backend.postman_environment.json](postman/ledger-backend.postman_environment.json). Replace placeholders locally. Run requests only against an isolated test database; registration, account creation, logout, and transfers write persistent data. A system user and its account must be provisioned outside the public API before initial funding can be tested.
 
@@ -131,15 +132,15 @@ Import [postman/ledger-backend.postman_collection.json](postman/ledger-backend.p
 
 - No health-check, transaction-history, account-update, or account-delete endpoint.
 - No custom centralized error or not-found response middleware.
-- No automated tests; the existing `test` script is a placeholder.
+- Automated coverage is currently limited to focused mocked controller tests; the existing `test` script is still a placeholder.
 - System-user provisioning is not exposed as an API.
 - The initial-funding route does not check source balance/status or perform the regular transfer's idempotency lookup.
-- The regular transfer lookup does not scope the source account to the authenticated user.
 - The regular transfer response uses the in-memory transaction created as `PENDING`, even after updating the database record to `COMPLETED`.
+- A conflicting concurrent transfer is aborted and returned as a generic `500`; it is not retried automatically.
 - Cookie security options and centralized environment validation are not configured in the inspected source.
 - Monetary amounts use JavaScript/Mongoose `Number`.
 - The blacklist schema spells its `unique` option as `unqiue`.
 
 ## Future improvements
 
-Add isolated automated tests, centralized validation and error handling, health/read APIs as needed, consistent account ownership checks, stronger transaction/idempotency handling, secure cookie options, explicit environment validation, and an exact monetary representation. These are recommendations only; this documentation task does not implement them.
+Expand isolated automated tests, add centralized validation and error handling, add health/read APIs as needed, improve transaction/idempotency retry handling, secure cookie options, explicit environment validation, and an exact monetary representation.
