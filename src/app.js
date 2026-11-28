@@ -10,6 +10,11 @@ const app = express()
 app.use(express.json())
 app.use(cookieParser())
 
+// dummy Api
+app.get("/",(req,res)=>{
+    res.send("ledger service is up and running")
+})
+
 // auth route
 app.use("/api/auth", authRouter)
 
